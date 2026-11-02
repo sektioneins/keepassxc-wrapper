@@ -135,6 +135,19 @@ func TestNewWritesProfile(t *testing.T) {
 	}
 }
 
+func TestNewMessageGoesToStderrOnly(t *testing.T) {
+	te, _ := lookupSetup(t, "secure-kp://spike-test")
+	if code := Main([]string{"new", "spike-test", "--command", "env", "--force"}, te.Env); code != 0 {
+		t.Fatalf("exit %d: %s", code, te.errb.String())
+	}
+	if te.out.Len() != 0 {
+		t.Errorf("stdout not empty: %q", te.out.String())
+	}
+	if !strings.Contains(te.errb.String(), "secure-kp: wrote ") {
+		t.Errorf("stderr: %q", te.errb.String())
+	}
+}
+
 func TestNewFlagsBeforeName(t *testing.T) {
 	te, _ := lookupSetup(t, "https://custom")
 	if code := Main([]string{"new", "--url", "https://custom", "--command", "x", "p1"}, te.Env); code != 0 {
