@@ -22,3 +22,15 @@ func TestRedact(t *testing.T) {
 	}
 	assertEq(t, Redact([]byte("not json")), "<unparseable>")
 }
+
+func TestRedactOtherSecretKeysAndNonStrings(t *testing.T) {
+	out := Redact([]byte(`{"totp":"123456","idKey":"idk-secret","idSecret":"ids-secret","password":12345,"key":{"nested":"deep-secret"},"name":"n"}`))
+	for _, s := range []string{"123456", "idk-secret", "ids-secret", "deep-secret"} {
+		if strings.Contains(out, s) {
+			t.Fatalf("%q leaked: %s", s, out)
+		}
+	}
+	if !strings.Contains(out, `"name":"n"`) {
+		t.Fatalf("non-secret value lost: %s", out)
+	}
+}
