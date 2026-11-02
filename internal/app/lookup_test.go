@@ -194,3 +194,11 @@ func TestNewNothingFoundWritesNothing(t *testing.T) {
 		t.Errorf("file written: %v", err)
 	}
 }
+
+func TestLookupSendsStoredPairingAsKeys(t *testing.T) {
+	te, fake := lookupSetup(t, "https://x")
+	if code := Main([]string{"lookup", "https://x"}, te.Env); code != 0 {
+		t.Fatalf("exit %d: %s", code, te.errb.String())
+	}
+	assertKeys(t, te, fake)
+}

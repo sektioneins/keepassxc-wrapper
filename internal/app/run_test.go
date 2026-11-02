@@ -306,3 +306,36 @@ func TestRunInvalidNameIsUsageError(t *testing.T) {
 		t.Fatalf("exit %d", code)
 	}
 }
+
+func TestRunSendsStoredPairingAsKeys(t *testing.T) {
+	te, fake := runSetup(t, kpxtest.Entry{Entry: kpx.Entry{UUID: uuidA, Name: "a", Password: "pw"}})
+	te.writeProfile(t, "p", `url = "`+runURL+`"
+command = ["c"]
+[secrets]
+T = { uuid = "`+uuidA+`" }
+`)
+	if code := Main([]string{"p"}, te.Env); code != 0 {
+		t.Fatalf("exit %d: %s", code, te.errb.String())
+	}
+	assertKeys(t, te, fake)
+}
+
+func assertKeys(t *testing.T, te *testEnv, fake *kpxtest.Server) {
+	t.Helper()
+	ps, _ := te.store.List()
+	if len(ps) != 1 {
+		t.Fatalf("pairings %d", len(ps))
+	}
+	for _, c := range fake.Calls() {
+		if c.Action != "get-logins" {
+			continue
+		}
+		ks, _ := c.Inner["keys"].([]any)
+		m, _ := ks[0].(map[string]any)
+		if len(ks) != 1 || m["id"] != ps[0].ID || m["key"] != ps[0].IDKey {
+			t.Errorf("keys %v, want pairing %s", ks, ps[0].ID)
+		}
+		return
+	}
+	t.Error("no get-logins call")
+}

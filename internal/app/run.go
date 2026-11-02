@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sektioneins/keepassxc-wrapper/internal/kpx"
+	"github.com/sektioneins/keepassxc-wrapper/internal/pairing"
 	"github.com/sektioneins/keepassxc-wrapper/internal/profile"
 )
 
@@ -117,14 +118,23 @@ func BuildEnv(base []string, env, secrets map[string]string) []string {
 	return out
 }
 
+// keysOf turns stored pairings into the keys sent with get-logins.
+func keysOf(all []pairing.Pairing) []kpx.Key {
+	keys := make([]kpx.Key, 0, len(all))
+	for _, p := range all {
+		keys = append(keys, kpx.Key{ID: p.ID, Key: p.IDKey})
+	}
+	return keys
+}
+
 // fetchSecrets makes one get-logins and resolves the profile's secrets.
 func fetchSecrets(e *Env, g globals, p *profile.Profile) (map[string]string, error) {
-	c, _, _, err := openSession(e, g)
+	c, all, _, err := openSession(e, g)
 	if err != nil {
 		return nil, err
 	}
 	defer c.Close()
-	entries, err := c.GetLogins(p.URL, nil)
+	entries, err := c.GetLogins(p.URL, keysOf(all))
 	denied := false
 	var pe *kpx.ProtocolError
 	if errors.As(err, &pe) && pe.Code == kpx.ErrNoLogins {

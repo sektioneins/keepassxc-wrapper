@@ -221,3 +221,16 @@ func TestGetTOTP(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestGetLoginsWithNonMatchingKeys(t *testing.T) {
+	c := connect(t, fakeWithEntry("secure-kp://p"), kpx.Options{})
+	if err := c.TestAssociate("id1", "idk"); err != nil {
+		t.Fatal(err)
+	}
+	for _, keys := range [][]kpx.Key{nil, {{ID: "id1", Key: "wrong"}}, {{ID: "other", Key: "idk"}}} {
+		_, err := c.GetLogins("secure-kp://p", keys)
+		if code := protoCode(t, err); code != "15" {
+			t.Errorf("keys %v: code %q", keys, code)
+		}
+	}
+}

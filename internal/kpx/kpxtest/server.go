@@ -247,6 +247,17 @@ func (ss *session) dispatch(action string, outer, inner map[string]any) (map[str
 		if !ss.authed {
 			return nil, kpx.ErrAssociationFailed
 		}
+		keyed := false
+		ks, _ := inner["keys"].([]any)
+		for _, k := range ks {
+			m, _ := k.(map[string]any)
+			if pk, ok := s.Pairings[str(m, "id")]; ok && pk == str(m, "key") {
+				keyed = true
+			}
+		}
+		if !keyed {
+			return nil, kpx.ErrNoLogins
+		}
 		var out []any
 		url := str(inner, "url")
 		for _, e := range s.Entries {

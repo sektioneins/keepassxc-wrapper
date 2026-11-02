@@ -113,7 +113,7 @@ func TestDebugOutputRedacted(t *testing.T) {
 	if _, err := kpx.CallForTest(c, "test-associate", map[string]any{"id": "id1", "key": "idkey1"}); err != nil {
 		t.Fatal(err)
 	}
-	r, err := kpx.CallForTest(c, "get-logins", map[string]any{"url": "secure-kp://p"})
+	r, err := kpx.CallForTest(c, "get-logins", map[string]any{"url": "secure-kp://p", "keys": []kpx.Key{{ID: "id1", Key: "idkey1"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

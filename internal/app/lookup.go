@@ -50,11 +50,11 @@ func formatLookup(url string, f []profile.Found) string {
 // fetchFound opens a session, makes exactly one get-logins and closes the
 // client again. It fails if nothing is found.
 func fetchFound(e *Env, g globals, url string) ([]profile.Found, error) {
-	c, _, _, err := openSession(e, g)
+	c, all, _, err := openSession(e, g)
 	if err != nil {
 		return nil, err
 	}
-	entries, err := c.GetLogins(url, nil)
+	entries, err := c.GetLogins(url, keysOf(all))
 	c.Close()
 	var pe *kpx.ProtocolError
 	if errors.As(err, &pe) && pe.Code == kpx.ErrNoLogins {
