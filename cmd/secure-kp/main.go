@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	home, _ := os.UserHomeDir() // on failure Home stays empty and profile.Dir falls back
+	home, _ := os.UserHomeDir() // on failure Home stays empty and app refuses to guess a config dir
 	env := &app.Env{
 		Stdout:        os.Stdout,
 		Stderr:        os.Stderr,

@@ -127,6 +127,15 @@ func keysOf(all []pairing.Pairing) []kpx.Key {
 	return keys
 }
 
+// isNoLogins reports whether err is a get-logins refusal that means "nothing
+// usable came back": no entries, access denied, or any other KeePassXC error
+// except a locked database and a failed association, which have their own
+// remedies.
+func isNoLogins(err error) bool {
+	var pe *kpx.ProtocolError
+	return errors.As(err, &pe) && pe.Code != kpx.ErrDatabaseNotOpened && pe.Code != kpx.ErrAssociationFailed
+}
+
 // fetchSecrets makes one get-logins and resolves the profile's secrets.
 func fetchSecrets(e *Env, g globals, p *profile.Profile) (map[string]string, error) {
 	c, all, _, err := openSession(e, g)
@@ -136,8 +145,7 @@ func fetchSecrets(e *Env, g globals, p *profile.Profile) (map[string]string, err
 	defer c.Close()
 	entries, err := c.GetLogins(p.URL, keysOf(all))
 	denied := false
-	var pe *kpx.ProtocolError
-	if errors.As(err, &pe) && pe.Code == kpx.ErrNoLogins {
+	if isNoLogins(err) {
 		denied, entries, err = true, nil, nil
 	}
 	if err != nil {
@@ -177,22 +185,26 @@ func runProfile(e *Env, g globals, name string, args []string) error {
 	if err := profile.ValidName(name); err != nil {
 		return usageError{err.Error()}
 	}
-	p, err := profile.Load(profile.Dir(e.Getenv, e.Home), name)
+	dir, err := configDir(e)
+	if err != nil {
+		return err
+	}
+	p, err := profile.Load(dir, name)
 	if err != nil {
 		return err
 	}
 	if err := p.Runnable(); err != nil {
 		return err
 	}
+	path, err := e.LookPath(p.Command[0])
+	if err != nil {
+		return exitError{127, fmt.Sprintf("command %q: %v", p.Command[0], err)}
+	}
 	var vals map[string]string
 	if len(p.Secrets) > 0 {
 		if vals, err = fetchSecrets(e, g, p); err != nil {
 			return err
 		}
-	}
-	path, err := e.LookPath(p.Command[0])
-	if err != nil {
-		return exitError{127, fmt.Sprintf("command %q not found in PATH", p.Command[0])}
 	}
 	argv := append(slices.Clone(p.Command), args...)
 	if err := e.Exec(path, argv, BuildEnv(e.Environ, p.Env, vals)); err != nil {

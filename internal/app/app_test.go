@@ -133,7 +133,7 @@ func TestExtraArgsRejected(t *testing.T) {
 	}
 }
 
-func TestStubsFailWithExitOne(t *testing.T) {
+func TestMissingProfileFailsWithExitOne(t *testing.T) {
 	te := newTestEnv(t, newFake())
 	if code := Main([]string{"someprofile"}, te.Env); code != 1 {
 		t.Errorf("exit %d, want 1", code)
@@ -242,5 +242,72 @@ func TestListEmpty(t *testing.T) {
 	}
 	if te.out.Len() != 0 || !strings.Contains(te.errb.String(), te.cfgDir) || !strings.Contains(te.errb.String(), "secure-kp new") {
 		t.Errorf("stdout %q stderr %q", te.out.String(), te.errb.String())
+	}
+}
+
+func TestUsageErrorsStartWithUsageHeader(t *testing.T) {
+	header := strings.SplitAfterN(usageText, "\n", 3)
+	want := header[0] + header[1]
+	for _, args := range [][]string{nil, {"-nope"}, {"list", "x"}, {"lookup"}, {"new"}, {"new", "p", "-bogus"}} {
+		te := newTestEnv(t, newFake())
+		if code := Main(args, te.Env); code != 2 {
+			t.Fatalf("%v: exit %d, want 2", args, code)
+		}
+		s := te.errb.String()
+		if !strings.HasPrefix(s, want) {
+			t.Errorf("%v: stderr does not start with the usage header: %q", args, s)
+		}
+		for _, l := range strings.Split(strings.TrimSuffix(s, "\n"), "\n") {
+			if strings.HasPrefix(l, "flag ") {
+				t.Errorf("%v: unprefixed flag message in %q", args, s)
+			}
+		}
+	}
+}
+
+func TestBadFlagMessageOncePrefixed(t *testing.T) {
+	for _, args := range [][]string{{"-x"}, {"new", "p", "-x"}} {
+		te := newTestEnv(t, newFake())
+		Main(args, te.Env)
+		s := te.errb.String()
+		if n := strings.Count(s, "flag provided but not defined: -x"); n != 1 {
+			t.Errorf("%v: message %d times in %q", args, n, s)
+		}
+		if !strings.Contains(s, "secure-kp: flag provided but not defined: -x") {
+			t.Errorf("%v: message lacks prefix: %q", args, s)
+		}
+	}
+}
+
+func TestSubcommandHelp(t *testing.T) {
+	for _, args := range [][]string{{"new", "-h"}, {"new", "--help"}, {"new", "p", "-h"}, {"lookup", "-h"}, {"lookup", "--help"}} {
+		fake := newFake()
+		te := newTestEnv(t, fake)
+		if code := Main(args, te.Env); code != 0 {
+			t.Fatalf("%v: exit %d, want 0: %s", args, code, te.errb.String())
+		}
+		if te.out.String() != usageText || te.errb.Len() != 0 {
+			t.Errorf("%v: stdout %q stderr %q", args, te.out.String(), te.errb.String())
+		}
+		if len(te.sockets) != 0 || len(fake.Calls()) != 0 {
+			t.Errorf("%v: connected to KeePassXC", args)
+		}
+	}
+}
+
+func TestRelativeConfigDirRefused(t *testing.T) {
+	te := newTestEnv(t, newFake())
+	te.vars = map[string]string{}
+	te.Home = ""
+	if code := Main([]string{"list"}, te.Env); code != 1 {
+		t.Fatalf("exit %d", code)
+	}
+	if !strings.Contains(te.errb.String(), "cannot determine the home directory; set SECURE_KP_CONFIG_DIR") {
+		t.Errorf("stderr %q", te.errb.String())
+	}
+	te = newTestEnv(t, newFake())
+	te.Home = ""
+	if code := Main([]string{"list"}, te.Env); code != 0 {
+		t.Errorf("with SECURE_KP_CONFIG_DIR: exit %d: %s", code, te.errb.String())
 	}
 }

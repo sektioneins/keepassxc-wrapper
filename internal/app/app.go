@@ -57,28 +57,43 @@ type usageError struct{ msg string }
 
 func (u usageError) Error() string { return u.msg }
 
+// helpRequested marks -h/--help after a subcommand: usage on stdout, exit 0.
+type helpRequested struct{}
+
+func (helpRequested) Error() string { return "help requested" }
+
+// flagError turns a flag parsing error into a usage error or a help request.
+func flagError(err error) error {
+	if errors.Is(err, flag.ErrHelp) {
+		return helpRequested{}
+	}
+	return usageError{err.Error()}
+}
+
+// configDir returns the profile directory, or an error when it would be a
+// path relative to the working directory because no home is known.
+func configDir(e *Env) (string, error) {
+	if e.Home == "" && e.Getenv("SECURE_KP_CONFIG_DIR") == "" && e.Getenv("XDG_CONFIG_HOME") == "" {
+		return "", errors.New("cannot determine the home directory; set SECURE_KP_CONFIG_DIR")
+	}
+	return profile.Dir(e.Getenv, e.Home), nil
+}
+
 // Main runs secure-kp with the arguments after the program name and returns
 // the exit code.
 func Main(args []string, e *Env) int {
 	fs := flag.NewFlagSet("secure-kp", flag.ContinueOnError)
-	fs.SetOutput(e.Stderr)
+	fs.SetOutput(io.Discard)
 	fs.Usage = func() {}
 	var g globals
 	fs.BoolVar(&g.verbose, "v", false, "write messages exchanged with KeePassXC to stderr, secrets masked")
 	fs.StringVar(&g.socket, "socket", "", "KeePassXC socket path")
 	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			fmt.Fprint(e.Stdout, usageText)
-			return 0
-		}
-		fmt.Fprint(e.Stderr, usageText)
-		return 2
+		return report(e, flagError(err))
 	}
 	rest := fs.Args()
 	if len(rest) == 0 {
-		fmt.Fprintln(e.Stderr, "secure-kp: missing profile or command")
-		fmt.Fprint(e.Stderr, usageText)
-		return 2
+		return report(e, usageError{"missing profile or command"})
 	}
 
 	var err error
@@ -99,14 +114,22 @@ func Main(args []string, e *Env) int {
 		}
 	}
 
+	return report(e, err)
+}
+
+// report prints err the way its kind requires and returns the exit code.
+func report(e *Env, err error) int {
 	var ue usageError
 	var xe exitError
 	switch {
 	case err == nil:
 		return 0
+	case errors.As(err, &helpRequested{}):
+		fmt.Fprint(e.Stdout, usageText)
+		return 0
 	case errors.As(err, &ue):
-		fmt.Fprintf(e.Stderr, "secure-kp: %s\n", ue.msg)
 		fmt.Fprint(e.Stderr, usageText)
+		fmt.Fprintf(e.Stderr, "secure-kp: %s\n", ue.msg)
 		return 2
 	case errors.As(err, &xe):
 		fmt.Fprintf(e.Stderr, "secure-kp: %s\n", xe.msg)

@@ -60,6 +60,10 @@ func openSession(e *Env, g globals) (*kpx.Client, []pairing.Pairing, pairing.Pai
 		}
 		if err := c.TestAssociate(p.ID, p.IDKey); err != nil {
 			c.Close()
+			var pe *kpx.ProtocolError
+			if errors.As(err, &pe) && pe.Code == kpx.ErrAssociationFailed {
+				err = fmt.Errorf("KeePassXC no longer knows the pairing %q; run secure-kp associate", p.ID)
+			}
 			return nil, nil, none, err
 		}
 		return c, all, p, nil

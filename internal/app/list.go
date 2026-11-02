@@ -12,7 +12,10 @@ import (
 
 // list prints the profiles without contacting KeePassXC.
 func list(e *Env) error {
-	dir := profile.Dir(e.Getenv, e.Home)
+	dir, err := configDir(e)
+	if err != nil {
+		return err
+	}
 	sums, err := profile.List(dir)
 	if err != nil {
 		return err

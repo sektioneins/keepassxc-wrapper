@@ -96,3 +96,13 @@ func TestSessionPicksPairingForOpenDatabase(t *testing.T) {
 		t.Errorf("picked %+v of %d", p, len(all))
 	}
 }
+
+func TestSessionPairingUnknownToKeePassXC(t *testing.T) {
+	fake := newFake()
+	te := newTestEnv(t, fake)
+	te.store.Put(pairing.Pairing{ID: "stale-id", IDKey: "k", IDSecret: "s", DBHash: fake.DBHash})
+	_, _, _, err := openSession(te.Env, globals{socket: "/s"})
+	if err == nil || !strings.Contains(err.Error(), `no longer knows the pairing "stale-id"; run secure-kp associate`) {
+		t.Fatalf("err = %v", err)
+	}
+}

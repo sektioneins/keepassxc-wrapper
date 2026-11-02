@@ -184,3 +184,25 @@ func TestListSummaries(t *testing.T) {
 		t.Errorf("missing dir: %v %v", empty, err)
 	}
 }
+
+func TestListFollowsSymlinks(t *testing.T) {
+	dir := t.TempDir()
+	other := t.TempDir()
+	write(t, other, "real.toml", "url = \"secure-kp://s\"\ncommand = [\"x\"]\n")
+	if err := os.Symlink(filepath.Join(other, "real.toml"), filepath.Join(dir, "linked.toml")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(other, filepath.Join(dir, "dirlink.toml")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(other, "gone.toml"), filepath.Join(dir, "dangling.toml")); err != nil {
+		t.Fatal(err)
+	}
+	got, err := List(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Name != "linked" || got[0].Problem != "" || got[0].URL != "secure-kp://s" {
+		t.Fatalf("got %+v", got)
+	}
+}

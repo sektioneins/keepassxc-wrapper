@@ -42,6 +42,7 @@ type Server struct {
 	Locked                bool
 	UnlockAfter           time.Duration // unlock this long after a triggerUnlock request
 	DenyLogins            bool
+	LoginsErrorCode       string // if set, get-logins fails with this error code
 	PushBefore            string // action pushed before every reply
 	CloseOn               string // action on which the connection is dropped unanswered
 	TOTP                  map[string]string
@@ -246,6 +247,9 @@ func (ss *session) dispatch(action string, outer, inner map[string]any) (map[str
 	case "get-logins":
 		if !ss.authed {
 			return nil, kpx.ErrAssociationFailed
+		}
+		if s.LoginsErrorCode != "" {
+			return nil, s.LoginsErrorCode
 		}
 		keyed := false
 		ks, _ := inner["keys"].([]any)

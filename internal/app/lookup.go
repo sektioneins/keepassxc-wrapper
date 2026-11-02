@@ -5,7 +5,6 @@ package app
 
 import (
 	"cmp"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -56,8 +55,7 @@ func fetchFound(e *Env, g globals, url string) ([]profile.Found, error) {
 	}
 	entries, err := c.GetLogins(url, keysOf(all))
 	c.Close()
-	var pe *kpx.ProtocolError
-	if errors.As(err, &pe) && pe.Code == kpx.ErrNoLogins {
+	if isNoLogins(err) {
 		return nil, fmt.Errorf("no entries found for %s (or access was denied)", url)
 	}
 	if err != nil {
@@ -72,6 +70,9 @@ func fetchFound(e *Env, g globals, url string) ([]profile.Found, error) {
 // lookup prints the entries matching a URL: names, UUIDs and field names,
 // never values.
 func lookup(e *Env, g globals, args []string) error {
+	if len(args) == 1 && (args[0] == "-h" || args[0] == "--help") {
+		return helpRequested{}
+	}
 	if len(args) != 1 {
 		return usageError{"lookup takes exactly one URL"}
 	}

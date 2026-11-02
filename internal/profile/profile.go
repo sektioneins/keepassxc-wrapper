@@ -149,7 +149,8 @@ type Summary struct {
 	Problem            string
 }
 
-// List summarises every <valid-name>.toml regular file in dir, sorted by name.
+// List summarises every <valid-name>.toml regular file in dir (symlinks to
+// regular files count, as for Load), sorted by name.
 // A missing directory gives an empty list.
 func List(dir string) ([]Summary, error) {
 	entries, err := os.ReadDir(dir)
@@ -163,8 +164,11 @@ func List(dir string) ([]Summary, error) {
 	for _, e := range entries {
 		fn := e.Name()
 		name, ok := strings.CutSuffix(fn, ".toml")
-		if !ok || !e.Type().IsRegular() || ValidName(name) != nil {
+		if !ok || ValidName(name) != nil {
 			continue
+		}
+		if fi, err := os.Stat(filepath.Join(dir, fn)); err != nil || !fi.Mode().IsRegular() {
+			continue // not a regular file, or a dangling symlink
 		}
 		s := Summary{Name: name}
 		p, err := Load(dir, name)

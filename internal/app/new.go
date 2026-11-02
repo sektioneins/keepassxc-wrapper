@@ -6,6 +6,7 @@ package app
 import (
 	"flag"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/sektioneins/keepassxc-wrapper/internal/profile"
@@ -15,26 +16,30 @@ import (
 // after the profile name.
 func newProfile(e *Env, g globals, args []string) error {
 	fs := flag.NewFlagSet("new", flag.ContinueOnError)
-	fs.SetOutput(e.Stderr)
+	fs.SetOutput(io.Discard)
 	fs.Usage = func() {}
 	command := fs.String("command", "", "command to run (split on whitespace)")
 	url := fs.String("url", "", "URL to look up (default secure-kp://<profile>)")
 	force := fs.Bool("force", false, "overwrite an existing profile")
 	if err := fs.Parse(args); err != nil {
-		return usageError{"bad arguments for new"}
+		return flagError(err)
 	}
 	if fs.NArg() == 0 {
 		return usageError{"new needs a profile name"}
 	}
 	name := fs.Arg(0)
 	if err := fs.Parse(fs.Args()[1:]); err != nil {
-		return usageError{"bad arguments for new"}
+		return flagError(err)
 	}
 	if fs.NArg() > 0 {
 		return usageError{"new takes exactly one profile name"}
 	}
 	if err := profile.ValidName(name); err != nil {
 		return usageError{err.Error()}
+	}
+	dir, err := configDir(e)
+	if err != nil {
+		return err
 	}
 	u := *url
 	if u == "" {
@@ -52,7 +57,6 @@ func newProfile(e *Env, g globals, args []string) error {
 	if err != nil {
 		return err
 	}
-	dir := profile.Dir(e.Getenv, e.Home)
 	if err := profile.Write(dir, name, data, *force); err != nil {
 		return err
 	}

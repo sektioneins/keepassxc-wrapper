@@ -11,11 +11,11 @@ import (
 )
 
 var secretKeys = map[string]bool{
-	"password": true, "totp": true, "key": true, "idKey": true, "idSecret": true,
+	"password": true, "login": true, "totp": true, "key": true, "idKey": true, "idSecret": true,
 }
 
 // Redact returns raw JSON with secret values replaced by "<redacted len=N>".
-// The secret keys are password, totp, key, idKey, idSecret and every value
+// The secret keys are password, login, totp, key, idKey, idSecret and every value
 // inside stringFields. Unparseable input yields "<unparseable>".
 func Redact(raw []byte) string {
 	var v any

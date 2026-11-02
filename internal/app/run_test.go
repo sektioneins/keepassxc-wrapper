@@ -226,8 +226,60 @@ command = ["nonesuch"]
 	if code := Main([]string{"p"}, te.Env); code != 127 {
 		t.Fatalf("exit %d", code)
 	}
-	if len(te.execs) != 0 || !strings.Contains(te.errb.String(), "nonesuch") {
+	if len(te.execs) != 0 || !strings.Contains(te.errb.String(), "nonesuch") || !strings.Contains(te.errb.String(), "not found") {
 		t.Errorf("execs %d stderr %q", len(te.execs), te.errb.String())
+	}
+}
+
+func TestRunCommandNotFoundBeforeKeePassXC(t *testing.T) {
+	te, fake := runSetup(t, kpxtest.Entry{Entry: kpx.Entry{UUID: uuidA, Name: "a", Password: "pw"}})
+	before := len(fake.Calls())
+	te.lookPathErr = errors.New("permission denied")
+	te.writeProfile(t, "p", `url = "`+runURL+`"
+command = ["nonesuch"]
+[secrets]
+T = { uuid = "`+uuidA+`" }
+`)
+	if code := Main([]string{"p"}, te.Env); code != 127 {
+		t.Fatalf("exit %d", code)
+	}
+	if len(fake.Calls()) != before || len(te.sockets) != 1 {
+		t.Errorf("KeePassXC contacted: %d new calls, sockets %v", len(fake.Calls())-before, te.sockets)
+	}
+	if !strings.Contains(te.errb.String(), "permission denied") {
+		t.Errorf("stderr %q lacks the LookPath error", te.errb.String())
+	}
+}
+
+func TestRunInlineTOTPNeedsNoGetTOTP(t *testing.T) {
+	te, fake := runSetup(t, kpxtest.Entry{Entry: kpx.Entry{UUID: uuidA, Name: "a", Password: "pw", TOTP: "654321"}})
+	te.writeProfile(t, "p", `url = "`+runURL+`"
+command = ["c"]
+[secrets]
+OTP = { uuid = "`+uuidA+`", field = "totp" }
+`)
+	if code := Main([]string{"p"}, te.Env); code != 0 {
+		t.Fatalf("exit %d: %s", code, te.errb.String())
+	}
+	if !envHas(te.execs[0].Env, "OTP=654321") {
+		t.Errorf("env %q", te.execs[0].Env)
+	}
+	if n := countCalls(fake, "get-totp"); n != 0 {
+		t.Errorf("get-totp called %d times", n)
+	}
+}
+
+func TestRunOtherLoginsErrorListsUnresolved(t *testing.T) {
+	te, fake := runSetup(t, kpxtest.Entry{Entry: kpx.Entry{UUID: uuidA, Name: "a", Password: "pw"}},
+		kpxtest.Entry{Entry: kpx.Entry{UUID: uuidB, Name: "b", Login: "u"}})
+	fake.LoginsErrorCode = "14"
+	te.writeProfile(t, "p", twoSecrets)
+	if code := Main([]string{"p"}, te.Env); code != 1 {
+		t.Fatalf("exit %d", code)
+	}
+	s := te.errb.String()
+	if !strings.Contains(s, "HCLOUD_TOKEN") || !strings.Contains(s, "HCLOUD_USER") || !strings.Contains(s, runURL) || len(te.execs) != 0 {
+		t.Errorf("stderr %q", s)
 	}
 }
 

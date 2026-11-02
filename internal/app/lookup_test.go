@@ -202,3 +202,14 @@ func TestLookupSendsStoredPairingAsKeys(t *testing.T) {
 	}
 	assertKeys(t, te, fake)
 }
+
+func TestLookupOtherLoginsErrorIsNoEntries(t *testing.T) {
+	te, fake := lookupSetup(t, "https://x")
+	fake.LoginsErrorCode = "14"
+	if code := Main([]string{"lookup", "https://x"}, te.Env); code != 1 {
+		t.Fatalf("exit %d", code)
+	}
+	if !strings.Contains(te.errb.String(), "no entries found for https://x (or access was denied)") {
+		t.Errorf("stderr %q", te.errb.String())
+	}
+}
