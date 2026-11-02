@@ -25,7 +25,7 @@ func TestRedact(t *testing.T) {
 
 func TestRedactOtherSecretKeysAndNonStrings(t *testing.T) {
 	out := Redact([]byte(`{"totp":"123456","idKey":"idk-secret","idSecret":"ids-secret","password":12345,"key":{"nested":"deep-secret"},"name":"n"}`))
-	for _, s := range []string{"123456", "idk-secret", "ids-secret", "deep-secret"} {
+	for _, s := range []string{"123456", "idk-secret", "ids-secret", "deep-secret", "12345"} {
 		if strings.Contains(out, s) {
 			t.Fatalf("%q leaked: %s", s, out)
 		}

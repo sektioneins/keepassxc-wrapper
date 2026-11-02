@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"time"
 
@@ -214,11 +215,13 @@ func (c *Client) call(action string, inner map[string]any, timeout time.Duration
 	for _, o := range opts {
 		o(&cfg)
 	}
-	inner["action"] = action
+	msg := make(map[string]any, len(inner)+2)
+	maps.Copy(msg, inner)
+	msg["action"] = action
 	if cfg.triggerUnlock {
-		inner["triggerUnlock"] = "true"
+		msg["triggerUnlock"] = "true"
 	}
-	plain, err := json.Marshal(inner)
+	plain, err := json.Marshal(msg)
 	if err != nil {
 		return nil, err
 	}

@@ -131,6 +131,9 @@ func TestDebugOutputRedacted(t *testing.T) {
 	if !strings.Contains(out, ">>>") || !strings.Contains(out, "<<<") {
 		t.Fatalf("no wire lines:\n%s", out)
 	}
+	if !strings.Contains(out, "<<< (inner)") || !strings.Contains(out, "<redacted") {
+		t.Fatalf("decrypted inner reply not logged, so the leak check proves nothing:\n%s", out)
+	}
 }
 
 func TestTriggerUnlockSentInnerAndOuter(t *testing.T) {
@@ -176,5 +179,57 @@ func TestCloseOnAndTimeoutDoNotHang(t *testing.T) {
 	_, err := kpx.NewClient(cl, kpx.Options{ReplyTimeout: 50 * time.Millisecond})
 	if err == nil {
 		t.Fatal("expected timeout")
+	}
+}
+
+func TestCallDoesNotMutateInner(t *testing.T) {
+	c := connect(t, newFake(), kpx.Options{})
+	inner := map[string]any{"x": "y"}
+	if _, err := kpx.CallForTest(c, "get-databasehash", inner, kpx.TriggerUnlockForTest); err != nil {
+		t.Fatal(err)
+	}
+	if len(inner) != 1 || inner["x"] != "y" {
+		t.Fatalf("inner mutated: %v", inner)
+	}
+	if _, err := kpx.CallForTest(c, "get-databasehash", nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFakeRejectsEncryptedBeforeKeyExchange(t *testing.T) {
+	cl := newFake().Conn()
+	defer cl.Close()
+	cl.SetDeadline(time.Now().Add(2 * time.Second))
+	msg, _ := json.Marshal(map[string]any{"action": "get-databasehash", "message": "AAAA",
+		"nonce": base64.StdEncoding.EncodeToString(make([]byte, 24)), "clientID": "x"})
+	cl.Write(msg)
+	var r map[string]any
+	if err := json.NewDecoder(cl).Decode(&r); err != nil || r["errorCode"] == nil {
+		t.Fatalf("reply %v err %v", r, err)
+	}
+}
+
+func TestFakeUnknownActionHasMessage(t *testing.T) {
+	c := connect(t, newFake(), kpx.Options{})
+	_, err := kpx.CallForTest(c, "bogus", map[string]any{})
+	var pe *kpx.ProtocolError
+	if !errors.As(err, &pe) || pe.Code != "4" || pe.Message == "" {
+		t.Fatalf("err %#v", err)
+	}
+}
+
+func TestFakeUnlockTimerStoppedOnClose(t *testing.T) {
+	f := newFake()
+	f.Locked = true
+	f.UnlockAfter = 150 * time.Millisecond
+	c := connect(t, f, kpx.Options{})
+	if _, err := c.DatabaseHash(true); err == nil {
+		t.Fatal("expected locked")
+	}
+	c.Close()
+	time.Sleep(400 * time.Millisecond)
+	c2 := connect(t, f, kpx.Options{})
+	if _, err := c2.DatabaseHash(false); err == nil {
+		t.Fatal("unlock timer fired after its connection ended")
 	}
 }

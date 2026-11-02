@@ -72,6 +72,8 @@ type session struct {
 	client     *[32]byte
 	authed     bool
 	unlockOnce sync.Once
+	tmu        sync.Mutex
+	timer      *time.Timer
 }
 
 func (s *Server) serve(conn net.Conn) {
@@ -81,6 +83,7 @@ func (s *Server) serve(conn net.Conn) {
 		return
 	}
 	ss := &session{s: s, conn: conn, pub: pub, sec: sec}
+	defer ss.stopTimer()
 	dec := json.NewDecoder(conn)
 	for {
 		var outer map[string]any
@@ -126,6 +129,9 @@ func (ss *session) handle(outer map[string]any) bool {
 	}
 	var inner map[string]any
 	if action != "change-public-keys" {
+		if ss.client == nil {
+			return ss.fail(action, "5", "public keys have not been exchanged")
+		}
 		ct, _ := b64.DecodeString(str(outer, "message"))
 		var n [24]byte
 		copy(n[:], nonce)
@@ -161,11 +167,14 @@ func (ss *session) handle(outer map[string]any) bool {
 	s.mu.Lock()
 	reply, code := ss.dispatch(action, outer, inner)
 	s.mu.Unlock()
-	if code == kpx.ErrDatabaseNotOpened && (str(inner, "triggerUnlock") == "true" || str(outer, "triggerUnlock") == "true") {
-		ss.scheduleUnlock()
-	}
 	if code != "" {
-		return ss.fail(action, code, errText[code])
+		ok := ss.fail(action, code, errText[code])
+		// Schedule the unlock only after the error reply is written, so the
+		// database-unlocked push cannot overtake it.
+		if code == kpx.ErrDatabaseNotOpened && (str(inner, "triggerUnlock") == "true" || str(outer, "triggerUnlock") == "true") {
+			ss.scheduleUnlock()
+		}
+		return ok
 	}
 	reply["action"] = action
 	reply["version"] = "2.8.0"
@@ -190,13 +199,24 @@ func (ss *session) scheduleUnlock() {
 		return
 	}
 	ss.unlockOnce.Do(func() {
-		time.AfterFunc(d, func() {
+		ss.tmu.Lock()
+		defer ss.tmu.Unlock()
+		ss.timer = time.AfterFunc(d, func() {
 			s.mu.Lock()
 			s.Locked = false
 			s.mu.Unlock()
 			ss.write(map[string]any{"action": "database-unlocked"})
 		})
 	})
+}
+
+// stopTimer cancels a pending unlock when the connection ends.
+func (ss *session) stopTimer() {
+	ss.tmu.Lock()
+	defer ss.tmu.Unlock()
+	if ss.timer != nil {
+		ss.timer.Stop()
+	}
 }
 
 // dispatch computes the reply body or an error code. s.mu is held.
@@ -250,6 +270,8 @@ func (ss *session) dispatch(action string, outer, inner map[string]any) (map[str
 	}
 	return nil, "4"
 }
+
+func init() { errText["4"] = "Unknown action" }
 
 func entryJSON(e kpx.Entry) map[string]any {
 	m := map[string]any{"uuid": e.UUID, "name": e.Name, "login": e.Login,
