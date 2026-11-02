@@ -100,6 +100,7 @@ func Main(args []string, e *Env) int {
 	}
 
 	var ue usageError
+	var xe exitError
 	switch {
 	case err == nil:
 		return 0
@@ -107,6 +108,9 @@ func Main(args []string, e *Env) int {
 		fmt.Fprintf(e.Stderr, "secure-kp: %s\n", ue.msg)
 		fmt.Fprint(e.Stderr, usageText)
 		return 2
+	case errors.As(err, &xe):
+		fmt.Fprintf(e.Stderr, "secure-kp: %s\n", xe.msg)
+		return xe.code
 	default:
 		fmt.Fprintf(e.Stderr, "secure-kp: %s\n", err)
 		return 1
