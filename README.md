@@ -116,6 +116,8 @@ secure-kp list                                      list profiles without contac
 
 Never tick 'Remember' in KeePassXC's access dialog. If you do, KeePassXC stops asking for those entries, and `secure-kp` has no way to bring the dialog back.
 
+KeePassXC leaves out expired entries unless 'Allow returning expired credentials' is on in its Browser Integration settings, so a profile that uses one stops with a missing secret. If the setting is on, `secure-kp` runs the command and prints a warning naming each expired entry it used.
+
 Once the command runs, its secrets sit in its environment, and other processes running under your user account can read that environment. Wrapping a tool keeps keys out of files and shell history, but it doesn't protect them from software already running as you.
 
 The Keychain item is tied to the `secure-kp` binary that created it. After a rebuild or update, macOS asks once whether the new binary may read it.
