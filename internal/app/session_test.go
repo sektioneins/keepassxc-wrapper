@@ -78,3 +78,21 @@ func TestSessionUnlockTimeout(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestSessionPicksPairingForOpenDatabase(t *testing.T) {
+	fake := newFake()
+	te := newTestEnv(t, fake)
+	if code := Main([]string{"associate"}, te.Env); code != 0 {
+		t.Fatalf("associate: %s", te.errb.String())
+	}
+	right, _ := te.store.List()
+	te.store.Put(pairing.Pairing{ID: "other-id", IDKey: "other-key", IDSecret: "s", DBHash: "ffffffffffffffffffffffffffffffff"})
+	c, all, p, err := openSession(te.Env, globals{socket: "/s"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	if len(all) != 2 || p.ID != right[0].ID || p.DBHash != fake.DBHash {
+		t.Errorf("picked %+v of %d", p, len(all))
+	}
+}
