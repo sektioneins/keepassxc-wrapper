@@ -95,6 +95,27 @@ SSH_PASS     = { uuid = "c0f0d43092f14ca499387b759edb541c" }
 
 Unknown keys are treated as errors, so a typo doesn't go unnoticed. A profile created by `new` without `--command` contains `command = ["CHANGE-ME"]` and refuses to run until you edit it.
 
+### Secrets in command arguments
+
+`secure-kp` never expands variables in `command`, so a secret can only reach the command through its environment. If a tool wants the secret as an argument, let a shell build the argument. This profile passes a tool a URL that contains a username and password:
+
+```toml
+url     = "secure-kp://mytool"
+command = [
+  "sh", "-c",
+  'exec mytool --remote "https://${REMOTE_USER}:${REMOTE_PASS}@example.com/data" "$@"',
+  "mytool",
+]
+
+[secrets]
+REMOTE_USER = { uuid = "5d2e8f0b7a3c4e1f9b6a0c8d2e4f6a1b", field = "username" }
+REMOTE_PASS = { uuid = "5d2e8f0b7a3c4e1f9b6a0c8d2e4f6a1b" }
+```
+
+`secure-kp mytool sync -q` then runs `mytool --remote https://USER:PASS@example.com/data sync -q`. The script is a TOML literal string in single quotes, so `sh` gets the variable names unexpanded. The extra `"mytool"` becomes `$0`, which `sh` uses in its error messages, and your own arguments follow as `$1` onwards. `exec` lets the tool replace the shell, so exit codes and signals still behave as if you had run it directly. Check whether the tool saves URLs it is given; if it does, the password ends up on disk unless you tell it not to.
+
+While the command runs, its arguments contain the secret. On macOS only your own user account and root can read another process's arguments, so this exposes the secret no more than the environment does. A password containing characters such as `@`, `:`, `/`, `%`, `#` or `?` has to be percent-encoded inside a URL. You can store an encoded copy in a `KPH: ` attribute and use that field instead.
+
 ## Commands
 
 ```
